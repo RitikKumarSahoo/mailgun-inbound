@@ -25,6 +25,15 @@
   },
   "engines": {
     "node": ">=14"
-  }
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RitikKumarSahoo/mailgun-inbound.git"
+  },
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/RitikKumarSahoo/mailgun-inbound/issues"
+  },
+  "homepage": "https://github.com/RitikKumarSahoo/mailgun-inbound#readme"
 }
-
