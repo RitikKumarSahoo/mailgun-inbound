@@ -1,10 +1,12 @@
 {
   "name": "mailgun-inbound-email",
   "version": "1.0.0",
-  "description": "A reusable npm package for handling Mailgun inbound email webhooks with Express.js",
+  "description": "Production-ready utility functions for manual processing of Mailgun inbound email webhooks. Full manual control - you handle everything.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "echo \"Linting not configured\"",
+    "prepublishOnly": "echo \"Ready to publish\""
   },
   "keywords": [
     "mailgun",
@@ -12,19 +14,17 @@
     "email",
     "webhook",
     "express",
-    "middleware"
+    "middleware",
+    "email-processing",
+    "mailgun-webhook",
+    "inbound-email",
+    "email-handler"
   ],
   "author": "",
   "license": "MIT",
-  "dependencies": {
-    "express": "^4.16.1",
-    "multer": "^2.0.2"
-  },
-  "peerDependencies": {
-    "express": "^4.0.0"
-  },
+  "dependencies": {},
   "engines": {
-    "node": ">=14"
+    "node": ">=14.0.0"
   },
   "devDependencies": {},
   "repository": {
@@ -35,5 +35,11 @@
   "bugs": {
     "url": "https://github.com/RitikKumarSahoo/mailgun-inbound/issues"
   },
-  "homepage": "https://github.com/RitikKumarSahoo/mailgun-inbound#readme"
+  "homepage": "https://github.com/RitikKumarSahoo/mailgun-inbound#readme",
+  "files": [
+    "index.js",
+    "README.md",
+    "LICENSE"
+  ]
 }
+
