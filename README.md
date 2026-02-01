@@ -11,7 +11,7 @@ npm install mailgun-inbound-email
 ```javascript
 const express = require('express');
 const multer = require('multer');
-const { processEmailData, verifyMailgunSignature } = require('mailgun-inbound-email');
+const { processEmailData, verifyRequestSignature } = require('mailgun-inbound-email');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -21,13 +21,13 @@ app.post('/webhook/inbound',
   upload.any(), 
   (req, res) => {
     try {
-      // Process email data
-      const { emailData, token, timestamp, signature } = processEmailData(req);
-      
-      // Verify signature
-      if (!verifyMailgunSignature(token, timestamp, signature, process.env.MAILGUN_WEBHOOK_SIGNING_KEY)) {
+      // Verify signature automatically (only need signing key)
+      if (!verifyRequestSignature(req, process.env.MAILGUN_WEBHOOK_SIGNING_KEY)) {
         return res.status(401).json({ error: 'Invalid signature' });
       }
+      
+      // Process email data
+      const { emailData } = processEmailData(req);
       
       // Manual processing - you have full control
       console.log('Email from:', emailData.from);
@@ -52,9 +52,12 @@ app.listen(3000);
 
 **That's it!** Just configure your Mailgun webhook URL to point to `https://yourdomain.com/webhook/inbound`
 
+> 📖 **Need help setting up the webhook?** See the detailed guide: [Setting Up Mailgun Inbound Webhook](#-setting-up-mailgun-inbound-webhook)
+
 ## ✨ Features
 
 - ✅ **Full Manual Control** - You handle everything, no magic
+- ✅ **Automatic Signature Verification** - Just provide signing key, package handles the rest
 - ✅ **Production-ready utilities** - Battle-tested functions
 - ✅ **Mailgun signature verification** - Secure by default
 - ✅ **Replay attack prevention** - 15-minute timestamp window
@@ -76,7 +79,7 @@ npm install mailgun-inbound-email
 ```javascript
 const express = require('express');
 const multer = require('multer');
-const { processEmailData, verifyMailgunSignature } = require('mailgun-inbound-email');
+const { processEmailData, verifyRequestSignature } = require('mailgun-inbound-email');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -86,14 +89,14 @@ app.post('/webhook/inbound',
   upload.any(), 
   (req, res) => {
     try {
-      // Process the email data
-      const { emailData, token, timestamp, signature } = processEmailData(req);
-      
-      // Verify Mailgun signature
+      // Verify signature automatically - only need signing key!
       const signingKey = process.env.MAILGUN_WEBHOOK_SIGNING_KEY;
-      if (!verifyMailgunSignature(token, timestamp, signature, signingKey)) {
+      if (!verifyRequestSignature(req, signingKey)) {
         return res.status(401).json({ error: 'Invalid Mailgun signature' });
       }
+      
+      // Process the email data
+      const { emailData } = processEmailData(req);
       
       // Validate required fields
       if (!emailData.from || !emailData.to || emailData.to.length === 0) {
@@ -244,9 +247,36 @@ Process raw Express request and return structured email data.
 const { emailData, token, timestamp, signature } = processEmailData(req);
 ```
 
+### `verifyRequestSignature(req, signingKey)`
+
+Verify Mailgun webhook signature automatically from request. This is the **recommended** method as it automatically extracts token, timestamp, and signature from the request.
+
+**Parameters:**
+- `req` (Object): Express request object with body
+- `signingKey` (string, optional): Mailgun webhook signing key. Defaults to `process.env.MAILGUN_WEBHOOK_SIGNING_KEY`
+
+**Returns:**
+- `boolean`: `true` if signature is valid
+
+**Example:**
+```javascript
+const { verifyRequestSignature } = require('mailgun-inbound-email');
+
+// Simple usage - automatically extracts token, timestamp, signature from req.body
+// Uses MAILGUN_WEBHOOK_SIGNING_KEY from environment automatically
+if (!verifyRequestSignature(req)) {
+  return res.status(401).json({ error: 'Invalid signature' });
+}
+
+// Or explicitly pass signing key
+if (!verifyRequestSignature(req, process.env.MAILGUN_WEBHOOK_SIGNING_KEY)) {
+  return res.status(401).json({ error: 'Invalid signature' });
+}
+```
+
 ### `verifyMailgunSignature(token, timestamp, signature, signingKey)`
 
-Verify Mailgun webhook signature to ensure authenticity.
+Verify Mailgun webhook signature manually (advanced usage). Use `verifyRequestSignature()` instead for simpler usage.
 
 **Parameters:**
 - `token` (string): Mailgun token from request
@@ -259,6 +289,8 @@ Verify Mailgun webhook signature to ensure authenticity.
 
 **Example:**
 ```javascript
+// Advanced usage - manually extract and verify
+const { token, timestamp, signature } = req.body;
 const isValid = verifyMailgunSignature(token, timestamp, signature, signingKey);
 if (!isValid) {
   return res.status(401).json({ error: 'Invalid signature' });
@@ -294,32 +326,183 @@ if (!isValid) {
 3. Copy your **Webhook Signing Key**
 4. Set it as environment variable: `export MAILGUN_WEBHOOK_SIGNING_KEY=your-key-here`
 
-## 📝 Setting Up Mailgun Webhook
+## 📝 Setting Up Mailgun Inbound Webhook
 
-1. **Install the package:**
+### Step 1: Install Package and Dependencies
+
+```bash
+# Install the package
+npm install mailgun-inbound-email
+
+# Install required dependencies
+npm install express multer
+```
+
+### Step 2: Set Up Your Express Server
+
+Set up your Express server with the webhook endpoint (see examples above).
+
+### Step 3: Configure Mailgun Inbound Route (Dashboard Method)
+
+Follow these steps to configure the inbound webhook URL in Mailgun Dashboard:
+
+#### Option A: Using Mailgun Dashboard (Recommended for beginners)
+
+1. **Log in to Mailgun Dashboard**
+   - Go to [https://app.mailgun.com](https://app.mailgun.com)
+   - Log in with your Mailgun account
+
+2. **Navigate to Your Domain**
+   - Click on **Sending** in the left sidebar
+   - Click on **Domains**
+   - Select your verified domain (or add a new domain if needed)
+
+3. **Go to Receiving Settings**
+   - In your domain settings, click on the **Receiving** tab
+   - You'll see options for handling inbound emails
+
+4. **Create Inbound Route**
+   - Click on **Routes** (or **Add Route**)
+   - Click **Create Route** button
+
+5. **Configure Route Settings**
+   - **Route Description**: Give it a name like "Inbound Email Webhook"
+   - **Filter Expression**: 
+     - For all emails: Select `catch_all()` or leave default
+     - For specific emails: Use `match_recipient("your-email@yourdomain.com")`
+   - **Actions**: 
+     - Select **Forward** or **Store and notify**
+     - Enter your webhook URL: `https://yourdomain.com/webhook/inbound`
+     - **Important**: Must use HTTPS (Mailgun requires it)
+
+6. **Save the Route**
+   - Click **Create Route** or **Save**
+   - Your route is now active
+
+#### Option B: Using Mailgun API (Recommended for automation)
+
+You can also create routes programmatically using the Mailgun API:
+
+```bash
+curl -X POST "https://api.mailgun.net/v3/routes" \
+  -u "api:YOUR_API_KEY" \
+  -F "priority=0" \
+  -F "description=Inbound Email Webhook" \
+  -F "expression=catch_all()" \
+  -F "action=forward('https://yourdomain.com/webhook/inbound')"
+```
+
+Or using Node.js:
+
+```javascript
+const formData = require('form-data');
+const Mailgun = require('mailgun.js');
+const mailgun = new Mailgun(formData);
+
+const mg = mailgun.client({
+  username: 'api',
+  key: process.env.MAILGUN_API_KEY
+});
+
+// Create inbound route
+mg.routes.create({
+  priority: 0,
+  description: 'Inbound Email Webhook',
+  expression: 'catch_all()',
+  action: ['forward("https://yourdomain.com/webhook/inbound")']
+})
+.then(msg => console.log('Route created:', msg))
+.catch(err => console.error('Error:', err));
+```
+
+### Step 4: Get Your Webhook Signing Key
+
+1. **Navigate to Webhooks Settings**
+   - In Mailgun Dashboard, go to **Settings** → **Webhooks**
+   - Or go to: [https://app.mailgun.com/app/webhooks](https://app.mailgun.com/app/webhooks)
+
+2. **Copy Your Signing Key**
+   - Find **Webhook Signing Key** section
+   - Click **Show** or **Reveal** to see your key
+   - Copy the signing key (it looks like: `key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`)
+
+3. **Set Environment Variable**
    ```bash
-   npm install mailgun-inbound-email
+   export MAILGUN_WEBHOOK_SIGNING_KEY=your-signing-key-here
+   ```
+   
+   Or add to your `.env` file:
+   ```
+   MAILGUN_WEBHOOK_SIGNING_KEY=your-signing-key-here
    ```
 
-2. **Set up your Express server** (see examples above)
+### Step 5: Test Your Webhook
 
-3. **Install required dependencies:**
-   ```bash
-   npm install express multer
-   ```
+1. **Deploy Your Server**
+   - Make sure your Express server is running and accessible via HTTPS
+   - Your webhook URL should be publicly accessible
 
-4. **Configure Mailgun webhook:**
-   - Go to Mailgun Dashboard → **Sending** → **Domains** → Your Domain
-   - Click **Receiving** → **Routes**
-   - Add route: `catch_all()` → `forward("https://yourdomain.com/webhook/inbound")`
-   - Or use Mailgun API to set webhook programmatically
+2. **Send a Test Email**
+   - Send an email to any address at your domain (e.g., `test@yourdomain.com`)
+   - Mailgun will forward it to your webhook URL
 
-5. **Set environment variable:**
-   ```bash
-   export MAILGUN_WEBHOOK_SIGNING_KEY=your-signing-key
-   ```
+3. **Check Your Logs**
+   - Check your server logs to see if the webhook was received
+   - Verify the email data is being processed correctly
 
-6. **Deploy and test!** Send an email to your domain and check your logs.
+4. **Verify in Mailgun Dashboard**
+   - Go to **Logs** → **Webhooks** in Mailgun Dashboard
+   - You should see webhook delivery attempts and their status
+
+### Step 6: Verify Domain DNS Settings (If Needed)
+
+If you haven't set up your domain yet, make sure to:
+
+1. **Add MX Records** (for receiving emails)
+   - Go to **Sending** → **Domains** → Your Domain → **DNS Records**
+   - Add MX record pointing to Mailgun:
+     - Priority: `10`
+     - Value: `mxa.mailgun.org`
+   - Add second MX record:
+     - Priority: `10`
+     - Value: `mxb.mailgun.org`
+
+2. **Verify Domain**
+   - Mailgun will provide DNS records to verify domain ownership
+   - Add the TXT record to your domain's DNS settings
+   - Wait for DNS propagation (can take up to 48 hours)
+
+### Troubleshooting
+
+**Webhook not receiving emails?**
+- ✅ Verify your webhook URL is accessible (test with curl or browser)
+- ✅ Ensure you're using HTTPS (Mailgun requires it)
+- ✅ Check Mailgun logs for delivery errors
+- ✅ Verify your route is active in Mailgun Dashboard
+- ✅ Check your server logs for incoming requests
+
+**Signature verification failing?**
+- ✅ Verify `MAILGUN_WEBHOOK_SIGNING_KEY` is set correctly
+- ✅ Check that you copied the full signing key
+- ✅ Ensure the key matches the one in Mailgun Dashboard
+
+**Emails not being forwarded?**
+- ✅ Verify MX records are set correctly
+- ✅ Check domain verification status
+- ✅ Ensure route filter expression matches your test email
+- ✅ Check Mailgun logs for any errors
+
+### Example Webhook URL Formats
+
+- Production: `https://api.yourdomain.com/webhook/inbound`
+- Staging: `https://staging-api.yourdomain.com/webhook/inbound`
+- Local testing (using ngrok): `https://abc123.ngrok.io/webhook/inbound`
+
+**Note**: For local development, use a tool like [ngrok](https://ngrok.com/) to expose your local server:
+```bash
+ngrok http 3000
+# Use the HTTPS URL provided by ngrok
+```
 
 ## 🎯 Production Checklist
 

@@ -7,7 +7,7 @@
 
 const express = require('express');
 const multer = require('multer');
-const { processEmailData, verifyMailgunSignature } = require('./index');
+const { processEmailData, verifyRequestSignature } = require('./index');
 
 const app = express();
 
@@ -25,17 +25,14 @@ app.post('/webhook/inbound',
   upload.any(), 
   async (req, res) => {
     try {
-      // Step 1: Process email data from request
-      const { emailData, token, timestamp, signature } = processEmailData(req);
-      
-      // Step 2: Verify Mailgun signature
+      // Step 1: Verify Mailgun signature automatically (only need signing key!)
       const signingKey = process.env.MAILGUN_WEBHOOK_SIGNING_KEY;
       if (!signingKey) {
         console.error('MAILGUN_WEBHOOK_SIGNING_KEY not set');
         return res.status(500).json({ error: 'Server configuration error' });
       }
       
-      if (!verifyMailgunSignature(token, timestamp, signature, signingKey)) {
+      if (!verifyRequestSignature(req, signingKey)) {
         console.warn('Invalid signature attempt', {
           ip: req.ip || req.connection.remoteAddress,
           timestamp: new Date().toISOString(),
@@ -45,6 +42,9 @@ app.post('/webhook/inbound',
           message: 'Webhook signature verification failed'
         });
       }
+      
+      // Step 2: Process email data from request
+      const { emailData } = processEmailData(req);
       
       // Step 3: Validate required fields
       if (!emailData.from || !emailData.to || emailData.to.length === 0) {

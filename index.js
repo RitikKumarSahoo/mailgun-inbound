@@ -101,6 +101,35 @@ function cleanMessageId(value) {
 }
 
 /**
+ * Verify Mailgun webhook signature automatically from request
+ * 
+ * This function automatically extracts token, timestamp, and signature
+ * from the request body and verifies the signature. You only need to
+ * provide the signing key.
+ * 
+ * @param {Object} req - Express request object with body
+ * @param {Object} req.body - Request body containing token, timestamp, signature
+ * @param {string} signingKey - Mailgun webhook signing key (or use MAILGUN_WEBHOOK_SIGNING_KEY env var)
+ * @returns {boolean} True if signature is valid
+ * 
+ * @example
+ * const { verifyRequestSignature } = require('mailgun-inbound-email');
+ * const signingKey = process.env.MAILGUN_WEBHOOK_SIGNING_KEY;
+ * if (!verifyRequestSignature(req, signingKey)) {
+ *   return res.status(401).json({ error: 'Invalid signature' });
+ * }
+ */
+function verifyRequestSignature(req, signingKey = process.env.MAILGUN_WEBHOOK_SIGNING_KEY) {
+  if (!req || !req.body) {
+    console.error("[MailgunInbound] Invalid request: missing body");
+    return false;
+  }
+
+  const { token, timestamp, signature } = req.body;
+  return verifyMailgunSignature(token, timestamp, signature, signingKey);
+}
+
+/**
  * Process email data from Mailgun webhook request
  * 
  * This function processes the raw Express request body and files
@@ -200,7 +229,8 @@ function processEmailData(req) {
 // Export utility functions for manual processing
 module.exports = {
   processEmailData,
-  verifyMailgunSignature,
+  verifyRequestSignature, // Automatic signature verification (recommended)
+  verifyMailgunSignature, // Manual signature verification (advanced)
   extractEmail,
   extractEmails,
   cleanMessageId,
