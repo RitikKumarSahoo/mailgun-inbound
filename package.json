@@ -1,0 +1,30 @@
+{
+  "name": "mailgun-inbound-email",
+  "version": "1.0.0",
+  "description": "A reusable npm package for handling Mailgun inbound email webhooks with Express.js",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "mailgun",
+    "inbound",
+    "email",
+    "webhook",
+    "express",
+    "middleware"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.16.1",
+    "multer": "^2.0.2"
+  },
+  "peerDependencies": {
+    "express": "^4.0.0"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}
+
