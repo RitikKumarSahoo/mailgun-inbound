@@ -1,6 +1,6 @@
 {
   "name": "mailgun-inbound-email",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "Production-ready utility functions for manual processing of Mailgun inbound email webhooks. Full manual control - you handle everything.",
   "main": "index.js",
   "scripts": {
