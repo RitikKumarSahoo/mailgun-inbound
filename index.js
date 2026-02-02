@@ -9,32 +9,14 @@ const crypto = require("crypto");
  * @returns {boolean} True if signature is valid
  */
 function verifyMailgunSignature(token, timestamp, signature, signingKey) {
-  if (!signingKey) {
-    console.error("[MailgunInbound] MAILGUN_WEBHOOK_SIGNING_KEY missing");
-    return false;
-  }
-
-  if (!token || !timestamp || !signature) {
-    console.error("[MailgunInbound] Missing required signature parameters");
+  if (!signingKey || !token || !timestamp || !signature) {
     return false;
   }
 
   const currentTime = Math.floor(Date.now() / 1000);
   const requestTime = Number(timestamp);
 
-  // Validate timestamp is a number
-  if (isNaN(requestTime)) {
-    console.error("[MailgunInbound] Invalid timestamp format");
-    return false;
-  }
-
-  // Prevent replay attack (15 min window)
-  if (Math.abs(currentTime - requestTime) > 900) {
-    console.error("[MailgunInbound] Expired timestamp", { 
-      currentTime, 
-      requestTime, 
-      difference: Math.abs(currentTime - requestTime) 
-    });
+  if (isNaN(requestTime) || Math.abs(currentTime - requestTime) > 900) {
     return false;
   }
 
@@ -49,7 +31,6 @@ function verifyMailgunSignature(token, timestamp, signature, signingKey) {
       Buffer.from(signature)
     );
   } catch (error) {
-    console.error("[MailgunInbound] Signature verification error:", error.message);
     return false;
   }
 }
@@ -104,11 +85,16 @@ function cleanMessageId(value) {
  * Verify Mailgun webhook signature automatically from request
  * 
  * This function automatically extracts token, timestamp, and signature
- * from the request body and verifies the signature. You only need to
- * provide the signing key.
+ * from the request body and verifies the signature. Supports both:
+ * - Inbound email webhooks: token, timestamp, signature at top level
+ * - Event webhooks: signature object with token, timestamp, signature fields
  * 
  * @param {Object} req - Express request object with body
- * @param {Object} req.body - Request body containing token, timestamp, signature
+ * @param {Object} req.body - Request body containing signature data
+ * @param {Object} req.body.signature - Signature object (for event webhooks) with token, timestamp, signature
+ * @param {string} req.body.token - Token (for inbound email webhooks, at top level)
+ * @param {string} req.body.timestamp - Timestamp (for inbound email webhooks, at top level)
+ * @param {string} req.body.signature - Signature (for inbound email webhooks, at top level)
  * @param {string} signingKey - Mailgun webhook signing key (or use MAILGUN_WEBHOOK_SIGNING_KEY env var)
  * @returns {boolean} True if signature is valid
  * 
@@ -121,11 +107,16 @@ function cleanMessageId(value) {
  */
 function verifyRequestSignature(req, signingKey = process.env.MAILGUN_WEBHOOK_SIGNING_KEY) {
   if (!req || !req.body) {
-    console.error("[MailgunInbound] Invalid request: missing body");
     return false;
   }
 
-  const { token, timestamp, signature } = req.body;
+  // Mailgun event webhooks: signature data in req.body.signature object
+  // Inbound email webhooks: signature data at top level
+  const sig = req.body.signature;
+  const token = sig?.token || req.body.token;
+  const timestamp = sig?.timestamp || req.body.timestamp;
+  const signature = sig?.signature || req.body.signature;
+
   return verifyMailgunSignature(token, timestamp, signature, signingKey);
 }
 
@@ -273,14 +264,7 @@ async function mailgunWebhook(req, res, signingKey = process.env.MAILGUN_WEBHOOK
     // 🔐 Verify Mailgun request signature
     const isValid = verifyRequestSignature(req, signingKey);
     if (!isValid) {
-      console.warn(`[MailgunWebhook:${correlationId}] Invalid Mailgun webhook signature`, {
-        ip: req.ip || req.connection?.remoteAddress,
-        userAgent: req.headers['user-agent'],
-        hasBody: !!req.body,
-        hasToken: !!req.body.token,
-        hasTimestamp: !!req.body.timestamp,
-        hasSignature: !!req.body.signature,
-      });
+      console.warn(`[MailgunWebhook:${correlationId}] Invalid Mailgun webhook signature`);
       res.status(401).json({ 
         received: false, 
         error: 'Invalid signature',
