@@ -226,11 +226,255 @@ function processEmailData(req) {
   };
 }
 
+/**
+ * Production-ready Mailgun event webhook handler
+ * 
+ * Handles Mailgun event webhooks (delivered, opened, clicked, bounced, etc.)
+ * with proper error handling, validation, and logging. Returns event data
+ * for manual processing and saving to database.
+ * 
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {string} signingKey - Mailgun webhook signing key (optional, defaults to MAILGUN_WEBHOOK_SIGNING_KEY env var)
+ * @returns {Promise<Object|null>} Returns event data if successfully processed, null otherwise
+ * 
+ * @example
+ * const { mailgunWebhook } = require('mailgun-inbound-email');
+ * 
+ * app.post('/webhook/mailgun-events', express.json(), async (req, res) => {
+ *   const eventData = await mailgunWebhook(req, res);
+ *   // eventData contains the processed event data for manual saving
+ *   if (eventData && eventData.received && eventData.event) {
+ *     await db.events.create(eventData);
+ *   }
+ * });
+ */
+async function mailgunWebhook(req, res, signingKey = process.env.MAILGUN_WEBHOOK_SIGNING_KEY) {
+  const startTime = Date.now();
+  const correlationId = req.headers['x-request-id'] || 
+                       req.headers['x-correlation-id'] || 
+                       `mg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+  try {
+    // Validate request body
+    if (!req || !req.body) {
+      console.error(`[MailgunWebhook:${correlationId}] Invalid request: missing body`, {
+        ip: req.ip || req.connection?.remoteAddress,
+        userAgent: req.headers['user-agent'],
+      });
+      res.status(400).json({ 
+        received: false, 
+        error: 'Invalid request',
+        correlationId 
+      });
+      return null;
+    }
+
+    // 🔐 Verify Mailgun request signature
+    const isValid = verifyRequestSignature(req, signingKey);
+    if (!isValid) {
+      console.warn(`[MailgunWebhook:${correlationId}] Invalid Mailgun webhook signature`, {
+        ip: req.ip || req.connection?.remoteAddress,
+        userAgent: req.headers['user-agent'],
+        hasBody: !!req.body,
+        hasToken: !!req.body.token,
+        hasTimestamp: !!req.body.timestamp,
+        hasSignature: !!req.body.signature,
+      });
+      res.status(401).json({ 
+        received: false, 
+        error: 'Invalid signature',
+        correlationId 
+      });
+      return null;
+    }
+
+    // Extract event data from request body
+    const eventData = req.body['event-data'] || {};
+    const event = eventData.event;
+    const eventId = eventData.id || eventData['event-id'] || null;
+    const recipient = eventData.recipient;
+    const messageId = eventData.message?.headers?.['message-id'] || 
+                     eventData['message-id'] || 
+                     eventData.messageId || 
+                     null;
+    const url = eventData.url;
+    const timestamp = eventData.timestamp || Date.now() / 1000;
+    const domain = eventData.domain?.name || eventData.domain;
+    const reason = eventData['delivery-status']?.description || 
+                  eventData.reason || 
+                  eventData['failure-reason'] || 
+                  null;
+
+    // Validate required fields
+    if (!event) {
+      console.warn(`[MailgunWebhook:${correlationId}] Missing event type`, { 
+        body: req.body 
+      });
+      const errorResponse = { 
+        received: true, 
+        error: 'Missing event type',
+        correlationId 
+      };
+      res.status(200).json(errorResponse);
+      return null;
+    }
+
+    // Prepare response data with correlation ID for tracking
+    let responseData = {
+      received: true,
+      event,
+      eventId,
+      recipient,
+      messageId,
+      timestamp: typeof timestamp === 'number' ? new Date(timestamp * 1000).toISOString() : timestamp,
+      domain,
+      correlationId,
+      processedAt: new Date().toISOString(),
+    };
+
+    // Handle different event types and add event-specific data
+    switch (event) {
+      case "delivered":
+        console.log(`[MailgunWebhook:${correlationId}] ✅ Email delivered to:`, recipient);
+        console.log(`[MailgunWebhook:${correlationId}]    Message ID:`, messageId);
+        responseData.status = "delivered";
+        responseData.deliveredAt = typeof timestamp === 'number' ? new Date(timestamp * 1000).toISOString() : timestamp;
+        if (eventData['delivery-status']) {
+          responseData.deliveryStatus = {
+            code: eventData['delivery-status'].code,
+            message: eventData['delivery-status'].message,
+            description: eventData['delivery-status'].description,
+            tls: eventData['delivery-status'].tls,
+            certificateVerified: eventData['delivery-status']['certificate-verified'],
+          };
+        }
+        break;
+
+      case "opened":
+        console.log(`[MailgunWebhook:${correlationId}] 👀 Email opened by:`, recipient);
+        console.log(`[MailgunWebhook:${correlationId}]    Message ID:`, messageId);
+        responseData.status = "opened";
+        responseData.openedAt = typeof timestamp === 'number' ? new Date(timestamp * 1000).toISOString() : timestamp;
+        responseData.clientInfo = eventData['client-info'] || null;
+        responseData.geolocation = eventData.geolocation || null;
+        responseData.userAgent = eventData['client-info']?.clientName || null;
+        break;
+
+      case "clicked":
+        console.log(`[MailgunWebhook:${correlationId}] 🔗 Link clicked:`, url);
+        console.log(`[MailgunWebhook:${correlationId}]    Recipient:`, recipient);
+        console.log(`[MailgunWebhook:${correlationId}]    Message ID:`, messageId);
+        responseData.status = "clicked";
+        responseData.url = url;
+        responseData.clickedAt = typeof timestamp === 'number' ? new Date(timestamp * 1000).toISOString() : timestamp;
+        responseData.clientInfo = eventData['client-info'] || null;
+        responseData.geolocation = eventData.geolocation || null;
+        break;
+
+      case "bounced":
+        console.log(`[MailgunWebhook:${correlationId}] ❌ Email bounced:`, recipient);
+        console.log(`[MailgunWebhook:${correlationId}]    Message ID:`, messageId);
+        responseData.status = "bounced";
+        responseData.reason = reason;
+        responseData.bouncedAt = typeof timestamp === 'number' ? new Date(timestamp * 1000).toISOString() : timestamp;
+        if (eventData['delivery-status']) {
+          responseData.deliveryStatus = {
+            code: eventData['delivery-status'].code,
+            message: eventData['delivery-status'].message,
+            description: eventData['delivery-status'].description,
+            attemptNo: eventData['delivery-status']['attempt-no'],
+            sessionSeconds: eventData['delivery-status']['session-seconds'],
+          };
+        }
+        responseData.severity = eventData.severity || 'permanent';
+        break;
+
+      case "complained":
+        console.log(`[MailgunWebhook:${correlationId}] 🚨 Spam complaint:`, recipient);
+        console.log(`[MailgunWebhook:${correlationId}]    Message ID:`, messageId);
+        responseData.status = "complained";
+        responseData.complainedAt = typeof timestamp === 'number' ? new Date(timestamp * 1000).toISOString() : timestamp;
+        break;
+
+      case "failed":
+        console.log(`[MailgunWebhook:${correlationId}] ⚠️ Email failed:`, recipient);
+        console.log(`[MailgunWebhook:${correlationId}]    Message ID:`, messageId);
+        responseData.status = "failed";
+        responseData.reason = reason;
+        responseData.failedAt = typeof timestamp === 'number' ? new Date(timestamp * 1000).toISOString() : timestamp;
+        if (eventData['delivery-status']) {
+          responseData.deliveryStatus = {
+            code: eventData['delivery-status'].code,
+            message: eventData['delivery-status'].message,
+            description: eventData['delivery-status'].description,
+            attemptNo: eventData['delivery-status']['attempt-no'],
+            sessionSeconds: eventData['delivery-status']['session-seconds'],
+          };
+        }
+        break;
+
+      case "unsubscribed":
+        console.log(`[MailgunWebhook:${correlationId}] 📤 User unsubscribed:`, recipient);
+        console.log(`[MailgunWebhook:${correlationId}]    Message ID:`, messageId);
+        responseData.status = "unsubscribed";
+        responseData.unsubscribedAt = typeof timestamp === 'number' ? new Date(timestamp * 1000).toISOString() : timestamp;
+        break;
+
+      case "stored":
+        console.log(`[MailgunWebhook:${correlationId}] 💾 Email stored:`, recipient);
+        console.log(`[MailgunWebhook:${correlationId}]    Message ID:`, messageId);
+        responseData.status = "stored";
+        responseData.storedAt = typeof timestamp === 'number' ? new Date(timestamp * 1000).toISOString() : timestamp;
+        break;
+
+      default:
+        console.log(`[MailgunWebhook:${correlationId}] ℹ️ Other event:`, event);
+        console.log(`[MailgunWebhook:${correlationId}]    Message ID:`, messageId);
+        responseData.status = "unknown";
+        responseData.fullEventData = eventData;
+    }
+
+    // Log successful processing
+    const duration = Date.now() - startTime;
+    console.log(`[MailgunWebhook:${correlationId}] ✅ Webhook processed successfully`, {
+      event,
+      eventId,
+      duration: `${duration}ms`,
+    });
+
+    // ✅ MUST return 200 OK with event data for manual saving
+    res.status(200).json(responseData);
+    
+    // Return event data so caller can save it manually
+    return responseData;
+
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(`[MailgunWebhook:${correlationId}] ❌ Webhook Error:`, {
+      error: error.message,
+      stack: error.stack,
+      duration: `${duration}ms`,
+    });
+
+    // ⚠️ Still return 200 so Mailgun doesn't retry forever
+    const errorResponse = { 
+      received: true, 
+      error: 'Processing failed but webhook acknowledged',
+      correlationId,
+      timestamp: new Date().toISOString(),
+    };
+    res.status(200).json(errorResponse);
+    return null;
+  }
+}
+
 // Export utility functions for manual processing
 module.exports = {
   processEmailData,
   verifyRequestSignature, // Automatic signature verification (recommended)
   verifyMailgunSignature, // Manual signature verification (advanced)
+  mailgunWebhook, // Production-ready event webhook handler
   extractEmail,
   extractEmails,
   cleanMessageId,

@@ -1,12 +1,14 @@
 # mailgun-inbound-email
 
-A **production-ready** utility package for manual processing of Mailgun inbound email webhooks. Full manual control - you handle everything from webhook setup to email processing.
+A **production-ready** utility package for manual processing of Mailgun webhooks. Supports both **inbound email webhooks** and **event webhooks** (delivered, opened, clicked, bounced, etc.). Full manual control - you handle everything from webhook setup to data processing.
 
 ## 🚀 Quick Start
 
 ```bash
 npm install mailgun-inbound-email
 ```
+
+> ⚠️ **REQUIRED**: Set `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable before using webhooks. See [Security](#-security) section for details.
 
 ```javascript
 const express = require('express');
@@ -52,7 +54,35 @@ app.listen(3000);
 
 **That's it!** Just configure your Mailgun webhook URL to point to `https://yourdomain.com/webhook/inbound`
 
+> ⚠️ **IMPORTANT**: Make sure to set `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable before running the server. Without it, webhook signature verification will fail.
+
 > 📖 **Need help setting up the webhook?** See the detailed guide: [Setting Up Mailgun Inbound Webhook](#-setting-up-mailgun-inbound-webhook)
+
+### Event Webhooks Quick Start
+
+For handling Mailgun event webhooks (delivered, opened, clicked, bounced, etc.):
+
+```javascript
+const express = require('express');
+const { mailgunWebhook } = require('mailgun-inbound-email');
+
+const app = express();
+
+app.post('/webhook/mailgun-events', express.json(), async (req, res) => {
+  const eventData = await mailgunWebhook(req, res);
+  
+  // Save event data manually
+  if (eventData && eventData.received && eventData.event) {
+    await db.events.create(eventData);
+  }
+});
+
+app.listen(3000);
+```
+
+**That's it!** Configure your Mailgun event webhook URL in Mailgun Dashboard → Settings → Webhooks → Add webhook → Select events → Enter URL: `https://yourdomain.com/webhook/mailgun-events`
+
+> ⚠️ **IMPORTANT**: Make sure to set `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable before running the server. Without it, webhook signature verification will fail.
 
 ## ✨ Features
 
@@ -63,6 +93,9 @@ app.listen(3000);
 - ✅ **Replay attack prevention** - 15-minute timestamp window
 - ✅ **Automatic email parsing** - Clean, structured email data
 - ✅ **Attachment support** - Metadata + buffers for manual handling
+- ✅ **Event webhook handler** - Production-ready handler for Mailgun event webhooks (delivered, opened, clicked, bounced, etc.)
+- ✅ **Returns event data** - Get processed event data for manual saving to database
+- ✅ **Structured logging** - Built-in logging with correlation IDs for tracking
 - ✅ **Zero dependencies** - Only Node.js built-ins
 - ✅ **Simple & lightweight** - Just utility functions
 
@@ -72,7 +105,13 @@ app.listen(3000);
 npm install mailgun-inbound-email
 ```
 
+> ⚠️ **REQUIRED**: After installation, you must set the `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable. See [Security](#-security) section for instructions.
+
 ## 🎯 Usage
+
+### Inbound Email Webhooks
+
+For receiving and processing inbound emails sent to your domain.
 
 ### Basic Example
 
@@ -189,6 +228,91 @@ app.post('/webhook/inbound', express.urlencoded({ extended: true }), upload.any(
 });
 ```
 
+### Event Webhooks (delivered, opened, clicked, bounced, etc.)
+
+For handling Mailgun event webhooks that track email delivery, opens, clicks, and other events.
+
+#### Simple Example
+
+```javascript
+const express = require('express');
+const { mailgunWebhook } = require('mailgun-inbound-email');
+
+const app = express();
+
+// Example database
+const db = {
+  events: {
+    async create(eventData) {
+      // Save event to your database
+      console.log('Saving event:', eventData.event);
+    }
+  }
+};
+
+app.post('/webhook/mailgun-events', express.json(), async (req, res) => {
+  // Call mailgunWebhook - it handles signature verification and returns event data
+  const eventData = await mailgunWebhook(req, res);
+  
+  // Save event data manually if event was successfully processed
+  if (eventData && eventData.received && eventData.event) {
+    try {
+      await db.events.create(eventData);
+      console.log('✅ Event saved successfully');
+    } catch (error) {
+      console.error('❌ Error saving event:', error);
+    }
+  }
+});
+
+app.listen(3000);
+```
+
+#### Advanced Example with Event Handling
+
+```javascript
+const express = require('express');
+const { mailgunWebhook } = require('mailgun-inbound-email');
+
+const app = express();
+
+app.post('/webhook/mailgun-events', express.json(), async (req, res) => {
+  const eventData = await mailgunWebhook(req, res);
+  
+  if (eventData && eventData.received && eventData.event) {
+    // Handle different event types
+    switch (eventData.event) {
+      case 'delivered':
+        await updateEmailStatus(eventData.messageId, 'delivered');
+        break;
+      case 'opened':
+        await trackEmailOpen(eventData.messageId, eventData.recipient);
+        break;
+      case 'clicked':
+        await trackLinkClick(eventData.messageId, eventData.url);
+        break;
+      case 'bounced':
+        await markRecipientAsBounced(eventData.recipient, eventData.reason);
+        break;
+      case 'complained':
+        await markRecipientAsComplained(eventData.recipient);
+        break;
+      case 'failed':
+        await handleEmailFailure(eventData);
+        break;
+      case 'unsubscribed':
+        await unsubscribeRecipient(eventData.recipient);
+        break;
+    }
+    
+    // Save event to database
+    await db.events.create(eventData);
+  }
+});
+
+app.listen(3000);
+```
+
 ## 📧 Email Data Structure
 
 The `emailData` object contains all parsed email information:
@@ -297,6 +421,82 @@ if (!isValid) {
 }
 ```
 
+### `mailgunWebhook(req, res, signingKey)`
+
+Production-ready handler for Mailgun event webhooks (delivered, opened, clicked, bounced, complained, failed, unsubscribed, stored, etc.). Handles signature verification, event parsing, and returns processed event data for manual saving.
+
+**Parameters:**
+- `req` (Object): Express request object
+- `res` (Object): Express response object
+- `signingKey` (string, optional): Mailgun webhook signing key. Defaults to `process.env.MAILGUN_WEBHOOK_SIGNING_KEY`
+
+**Returns:**
+- `Promise<Object|null>`: Returns processed event data if successful, `null` if error or invalid request
+
+**Example:**
+```javascript
+const { mailgunWebhook } = require('mailgun-inbound-email');
+
+app.post('/webhook/mailgun-events', express.json(), async (req, res) => {
+  const eventData = await mailgunWebhook(req, res);
+  
+  // Save event data manually if webhook was successful
+  if (eventData && eventData.received && eventData.event) {
+    await db.events.create(eventData);
+  }
+});
+```
+
+**Event Data Structure:**
+```javascript
+{
+  received: true,
+  event: "delivered" | "opened" | "clicked" | "bounced" | "complained" | "failed" | "unsubscribed" | "stored" | "unknown",
+  eventId: "string",              // Unique event ID (for idempotency)
+  recipient: "user@example.com",   // Email recipient
+  messageId: "string",             // Email message ID
+  timestamp: "2024-01-01T00:00:00.000Z", // ISO timestamp
+  domain: "example.com",           // Mailgun domain
+  correlationId: "string",         // Request correlation ID for tracking
+  processedAt: "2024-01-01T00:00:00.000Z", // When webhook was processed
+  status: "delivered" | "opened" | "clicked" | "bounced" | "complained" | "failed" | "unsubscribed" | "stored" | "unknown",
+  
+  // Event-specific fields:
+  url: "string",                   // For 'clicked' events
+  reason: "string",                 // For 'bounced'/'failed' events
+  deliveryStatus: {                // For 'delivered'/'bounced'/'failed' events
+    code: number,
+    message: string,
+    description: string,
+    tls: boolean,
+    certificateVerified: boolean,
+    attemptNo: number,
+    sessionSeconds: number,
+  },
+  clientInfo: {                    // For 'opened'/'clicked' events
+    clientName: string,
+    clientType: string,
+    deviceType: string,
+    userAgent: string,
+  },
+  geolocation: {                   // For 'opened'/'clicked' events
+    country: string,
+    region: string,
+    city: string,
+  },
+  severity: "permanent" | "temporary", // For 'bounced' events
+  deliveredAt: "ISO string",      // For 'delivered' events
+  openedAt: "ISO string",          // For 'opened' events
+  clickedAt: "ISO string",         // For 'clicked' events
+  bouncedAt: "ISO string",         // For 'bounced' events
+  complainedAt: "ISO string",     // For 'complained' events
+  failedAt: "ISO string",          // For 'failed' events
+  unsubscribedAt: "ISO string",    // For 'unsubscribed' events
+  storedAt: "ISO string",         // For 'stored' events
+  fullEventData: {},               // For 'unknown' events - contains raw event data
+}
+```
+
 ### Utility Functions
 
 | Function | Description |
@@ -310,7 +510,12 @@ if (!isValid) {
 
 ### Required Environment Variable
 
-- `MAILGUN_WEBHOOK_SIGNING_KEY`: Your Mailgun webhook signing key (found in Mailgun dashboard → Settings → Webhooks)
+> ⚠️ **REQUIRED**: `MAILGUN_WEBHOOK_SIGNING_KEY` must be set for webhook signature verification to work.
+
+- **`MAILGUN_WEBHOOK_SIGNING_KEY`** (REQUIRED): Your Mailgun webhook signing key (found in Mailgun dashboard → Settings → Webhooks)
+  - This is **required** for both inbound email webhooks and event webhooks
+  - Without this key, all webhook requests will be rejected with 401 Unauthorized
+  - Get your key from: Mailgun Dashboard → Settings → Webhooks → Webhook Signing Key
 
 ### Security Features
 
@@ -338,11 +543,27 @@ npm install mailgun-inbound-email
 npm install express multer
 ```
 
-### Step 2: Set Up Your Express Server
+### Step 2: Set Up Environment Variable (REQUIRED)
+
+> ⚠️ **REQUIRED**: You must set `MAILGUN_WEBHOOK_SIGNING_KEY` before setting up your server.
+
+1. Get your webhook signing key from Mailgun Dashboard → Settings → Webhooks
+2. Set it as an environment variable:
+
+```bash
+export MAILGUN_WEBHOOK_SIGNING_KEY=your-signing-key-here
+```
+
+Or add to your `.env` file:
+```
+MAILGUN_WEBHOOK_SIGNING_KEY=your-signing-key-here
+```
+
+### Step 3: Set Up Your Express Server
 
 Set up your Express server with the webhook endpoint (see examples above).
 
-### Step 3: Configure Mailgun Inbound Route (Dashboard Method)
+### Step 4: Configure Mailgun Inbound Route (Dashboard Method)
 
 Follow these steps to configure the inbound webhook URL in Mailgun Dashboard:
 
@@ -415,7 +636,7 @@ mg.routes.create({
 .catch(err => console.error('Error:', err));
 ```
 
-### Step 4: Get Your Webhook Signing Key
+> **Note**: If you already set `MAILGUN_WEBHOOK_SIGNING_KEY` in Step 2, you can skip this step.
 
 1. **Navigate to Webhooks Settings**
    - In Mailgun Dashboard, go to **Settings** → **Webhooks**
@@ -426,7 +647,7 @@ mg.routes.create({
    - Click **Show** or **Reveal** to see your key
    - Copy the signing key (it looks like: `key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`)
 
-3. **Set Environment Variable**
+3. **Set Environment Variable** (if not already set in Step 2)
    ```bash
    export MAILGUN_WEBHOOK_SIGNING_KEY=your-signing-key-here
    ```
@@ -482,9 +703,10 @@ If you haven't set up your domain yet, make sure to:
 - ✅ Check your server logs for incoming requests
 
 **Signature verification failing?**
-- ✅ Verify `MAILGUN_WEBHOOK_SIGNING_KEY` is set correctly
+- ✅ **REQUIRED**: Verify `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable is set (this is required!)
 - ✅ Check that you copied the full signing key
 - ✅ Ensure the key matches the one in Mailgun Dashboard
+- ✅ Verify the environment variable is loaded in your application (check with `console.log(process.env.MAILGUN_WEBHOOK_SIGNING_KEY)`)
 
 **Emails not being forwarded?**
 - ✅ Verify MX records are set correctly
@@ -504,9 +726,133 @@ ngrok http 3000
 # Use the HTTPS URL provided by ngrok
 ```
 
+## 📝 Setting Up Mailgun Event Webhooks
+
+Event webhooks track email events like delivered, opened, clicked, bounced, etc. These are different from inbound email webhooks.
+
+### Step 1: Install Package and Dependencies
+
+```bash
+# Install the package
+npm install mailgun-inbound-email
+
+# Install required dependencies (only express needed for event webhooks)
+npm install express
+```
+
+### Step 2: Set Up Environment Variable (REQUIRED)
+
+> ⚠️ **REQUIRED**: You must set `MAILGUN_WEBHOOK_SIGNING_KEY` before setting up your server.
+
+1. Get your webhook signing key from Mailgun Dashboard → Settings → Webhooks
+2. Set it as an environment variable:
+
+```bash
+export MAILGUN_WEBHOOK_SIGNING_KEY=your-signing-key-here
+```
+
+Or add to your `.env` file:
+```
+MAILGUN_WEBHOOK_SIGNING_KEY=your-signing-key-here
+```
+
+### Step 3: Set Up Your Express Server
+
+Set up your Express server with the event webhook endpoint (see examples above in the Event Webhooks section).
+
+### Step 4: Configure Event Webhook in Mailgun Dashboard
+
+1. **Log in to Mailgun Dashboard**
+   - Go to [https://app.mailgun.com](https://app.mailgun.com)
+   - Log in with your Mailgun account
+
+2. **Navigate to Webhooks Settings**
+   - Click on **Settings** in the left sidebar
+   - Click on **Webhooks**
+   - Or go directly to: [https://app.mailgun.com/app/webhooks](https://app.mailgun.com/app/webhooks)
+
+3. **Add New Webhook**
+   - Click **Add webhook** button
+   - Select the events you want to track:
+     - ✅ **Delivered** - Email successfully delivered
+     - ✅ **Opened** - Email was opened by recipient
+     - ✅ **Clicked** - Link in email was clicked
+     - ✅ **Bounced** - Email bounced (permanent or temporary)
+     - ✅ **Complained** - Recipient marked email as spam
+     - ✅ **Failed** - Email delivery failed
+     - ✅ **Unsubscribed** - Recipient unsubscribed
+     - ✅ **Stored** - Email was stored
+
+4. **Enter Webhook URL**
+   - Enter your webhook URL: `https://yourdomain.com/webhook/mailgun-events`
+   - **Important**: Must use HTTPS (Mailgun requires it)
+   - The webhook will receive JSON payloads (not form-data like inbound emails)
+
+5. **Save the Webhook**
+   - Click **Save** or **Add webhook**
+   - Your webhook is now active and will receive events
+
+> **Note**: If you already set `MAILGUN_WEBHOOK_SIGNING_KEY` in Step 2, you can skip this step. The same signing key is used for both inbound and event webhooks.
+
+1. **Navigate to Webhooks Settings**
+   - In Mailgun Dashboard, go to **Settings** → **Webhooks**
+   - Find **Webhook Signing Key** section
+
+2. **Copy Your Signing Key**
+   - Click **Show** or **Reveal** to see your key
+   - Copy the signing key (it looks like: `key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`)
+
+3. **Set Environment Variable** (if not already set in Step 2)
+   ```bash
+   export MAILGUN_WEBHOOK_SIGNING_KEY=your-signing-key-here
+   ```
+   
+   Or add to your `.env` file:
+   ```
+   MAILGUN_WEBHOOK_SIGNING_KEY=your-signing-key-here
+   ```
+
+### Step 5: Test Your Event Webhook
+
+1. **Send a Test Email**
+   - Send an email using Mailgun API or dashboard
+   - The email should trigger events (delivered, opened, clicked, etc.)
+
+2. **Check Your Logs**
+   - Check your server logs to see if events are being received
+   - Verify the event data is being processed correctly
+
+3. **Verify in Mailgun Dashboard**
+   - Go to **Logs** → **Webhooks** in Mailgun Dashboard
+   - You should see webhook delivery attempts and their status
+   - Check that events are being sent to your webhook URL
+
+### Troubleshooting Event Webhooks
+
+**Events not being received?**
+- ✅ Verify your webhook URL is accessible (test with curl or browser)
+- ✅ Ensure you're using HTTPS (Mailgun requires it)
+- ✅ Check that you selected the correct events in Mailgun Dashboard
+- ✅ Verify your webhook is active in Mailgun Dashboard
+- ✅ Check Mailgun logs for delivery errors
+- ✅ Check your server logs for incoming requests
+
+**Event data not saving?**
+- ✅ Verify `mailgunWebhook()` is returning event data
+- ✅ Check that you're checking `eventData.received && eventData.event` before saving
+- ✅ Ensure your database connection is working
+- ✅ Check for errors in your event saving logic
+
+**Signature verification failing?**
+- ✅ **REQUIRED**: Verify `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable is set (this is required!)
+- ✅ Check that you copied the full signing key
+- ✅ Ensure the key matches the one in Mailgun Dashboard
+- ✅ Verify the environment variable is loaded in your application (check with `console.log(process.env.MAILGUN_WEBHOOK_SIGNING_KEY)`)
+
 ## 🎯 Production Checklist
 
-- ✅ Set `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable
+### Inbound Email Webhooks
+- ✅ **REQUIRED**: Set `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable
 - ✅ Use HTTPS for webhook URL (Mailgun requires it)
 - ✅ Implement your email processing logic
 - ✅ Handle attachments if needed (buffers are included)
@@ -514,13 +860,25 @@ ngrok http 3000
 - ✅ Test webhook signature verification
 - ✅ Always return 200 status to Mailgun (prevents retries)
 
+### Event Webhooks (delivered, opened, clicked, etc.)
+- ✅ **REQUIRED**: Set `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable
+- ✅ Use HTTPS for webhook URL (Mailgun requires it)
+- ✅ Implement event data saving logic (use returned event data)
+- ✅ Handle different event types appropriately
+- ✅ Set up error monitoring/logging
+- ✅ Test webhook signature verification
+- ✅ Always return 200 status to Mailgun (prevents retries)
+- ✅ Consider implementing idempotency checks using `eventId`
+
 ## ⚠️ Important Notes
 
 - **Always return 200** to Mailgun (even on errors) to prevent retries
 - **Use HTTPS** for webhook URLs (Mailgun requirement)
 - **Full manual control** - this package only provides utilities, you handle everything
 - **Attachments include buffers** - handle large files appropriately
+- **Event webhooks return data** - `mailgunWebhook()` returns event data for manual saving
 - **Zero dependencies** - only uses Node.js built-in modules
+- **Two webhook types** - Inbound email webhooks (form-data) vs Event webhooks (JSON)
 
 ## 📄 License
 
