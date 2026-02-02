@@ -262,7 +262,13 @@ async function mailgunWebhook(req, res, signingKey = process.env.MAILGUN_WEBHOOK
     }
 
     // 🔐 Verify Mailgun request signature
-    const isValid = verifyRequestSignature(req, signingKey);
+    // Extract signature data from request body (supports both event and inbound webhooks)
+    const sig = req.body.signature;
+    const token = sig?.token || req.body.token;
+    const sigTimestamp = sig?.timestamp || req.body.timestamp;
+    const signature = sig?.signature || req.body.signature;
+    
+    const isValid = verifyMailgunSignature(token, sigTimestamp, signature, signingKey);
     if (!isValid) {
       console.warn(`[MailgunWebhook:${correlationId}] Invalid Mailgun webhook signature`);
       res.status(401).json({ 
