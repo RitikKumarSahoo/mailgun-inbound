@@ -8,7 +8,7 @@ A **production-ready** utility package for manual processing of Mailgun webhooks
 npm install mailgun-inbound-email
 ```
 
-> ⚠️ **REQUIRED**: Set `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable before using webhooks. See [Security](#-security) section for details.
+> ⚠️ **REQUIRED**: Set `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable. See [Security](#-security) section for details.
 
 ```javascript
 const express = require('express');
@@ -54,8 +54,6 @@ app.listen(3000);
 
 **That's it!** Just configure your Mailgun webhook URL to point to `https://yourdomain.com/webhook/inbound`
 
-> ⚠️ **IMPORTANT**: Make sure to set `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable before running the server. Without it, webhook signature verification will fail.
-
 > 📖 **Need help setting up the webhook?** See the detailed guide: [Setting Up Mailgun Inbound Webhook](#-setting-up-mailgun-inbound-webhook)
 
 ### Event Webhooks Quick Start
@@ -82,8 +80,6 @@ app.listen(3000);
 
 **That's it!** Configure your Mailgun event webhook URL in Mailgun Dashboard → Settings → Webhooks → Add webhook → Select events → Enter URL: `https://yourdomain.com/webhook/mailgun-events`
 
-> ⚠️ **IMPORTANT**: Make sure to set `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable before running the server. Without it, webhook signature verification will fail.
-
 ## ✨ Features
 
 - ✅ **Full Manual Control** - You handle everything, no magic
@@ -105,7 +101,7 @@ app.listen(3000);
 npm install mailgun-inbound-email
 ```
 
-> ⚠️ **REQUIRED**: After installation, you must set the `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable. See [Security](#-security) section for instructions.
+> ⚠️ **REQUIRED**: Set `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable. See [Security](#-security) section for instructions.
 
 ## 🎯 Usage
 
@@ -526,10 +522,9 @@ app.post('/webhook/mailgun-events', express.json(), async (req, res) => {
 
 ### Getting Your Signing Key
 
-1. Log in to [Mailgun Dashboard](https://app.mailgun.com)
-2. Go to **Settings** → **Webhooks**
-3. Copy your **Webhook Signing Key**
-4. Set it as environment variable: `export MAILGUN_WEBHOOK_SIGNING_KEY=your-key-here`
+See the setup sections below for detailed instructions:
+- [Inbound Webhook Setup - Step 2](#step-2-set-up-environment-variable-required)
+- [Event Webhook Setup - Step 2](#step-2-set-up-environment-variable-required-1)
 
 ## 📝 Setting Up Mailgun Inbound Webhook
 
@@ -636,27 +631,6 @@ mg.routes.create({
 .catch(err => console.error('Error:', err));
 ```
 
-> **Note**: If you already set `MAILGUN_WEBHOOK_SIGNING_KEY` in Step 2, you can skip this step.
-
-1. **Navigate to Webhooks Settings**
-   - In Mailgun Dashboard, go to **Settings** → **Webhooks**
-   - Or go to: [https://app.mailgun.com/app/webhooks](https://app.mailgun.com/app/webhooks)
-
-2. **Copy Your Signing Key**
-   - Find **Webhook Signing Key** section
-   - Click **Show** or **Reveal** to see your key
-   - Copy the signing key (it looks like: `key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`)
-
-3. **Set Environment Variable** (if not already set in Step 2)
-   ```bash
-   export MAILGUN_WEBHOOK_SIGNING_KEY=your-signing-key-here
-   ```
-   
-   Or add to your `.env` file:
-   ```
-   MAILGUN_WEBHOOK_SIGNING_KEY=your-signing-key-here
-   ```
-
 ### Step 5: Test Your Webhook
 
 1. **Deploy Your Server**
@@ -744,7 +718,13 @@ npm install express
 
 > ⚠️ **REQUIRED**: You must set `MAILGUN_WEBHOOK_SIGNING_KEY` before setting up your server.
 
-1. Get your webhook signing key from Mailgun Dashboard → Settings → Webhooks
+> **Note**: If you already set this in the [Inbound Webhook setup](#step-2-set-up-environment-variable-required), you can skip this step. The same signing key is used for both webhook types.
+
+1. Get your webhook signing key:
+   - Log in to [Mailgun Dashboard](https://app.mailgun.com)
+   - Go to **Settings** → **Webhooks**
+   - Copy your **Webhook Signing Key** (looks like: `key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`)
+
 2. Set it as an environment variable:
 
 ```bash
@@ -792,25 +772,7 @@ Set up your Express server with the event webhook endpoint (see examples above i
    - Click **Save** or **Add webhook**
    - Your webhook is now active and will receive events
 
-> **Note**: If you already set `MAILGUN_WEBHOOK_SIGNING_KEY` in Step 2, you can skip this step. The same signing key is used for both inbound and event webhooks.
-
-1. **Navigate to Webhooks Settings**
-   - In Mailgun Dashboard, go to **Settings** → **Webhooks**
-   - Find **Webhook Signing Key** section
-
-2. **Copy Your Signing Key**
-   - Click **Show** or **Reveal** to see your key
-   - Copy the signing key (it looks like: `key-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`)
-
-3. **Set Environment Variable** (if not already set in Step 2)
-   ```bash
-   export MAILGUN_WEBHOOK_SIGNING_KEY=your-signing-key-here
-   ```
-   
-   Or add to your `.env` file:
-   ```
-   MAILGUN_WEBHOOK_SIGNING_KEY=your-signing-key-here
-   ```
+> **Note**: The same `MAILGUN_WEBHOOK_SIGNING_KEY` is used for both inbound and event webhooks. If you already set it in Step 2, you're all set!
 
 ### Step 5: Test Your Event Webhook
 
