@@ -6,16 +6,16 @@ To use this package in your project before publishing to npm:
 
 ### Option 1: npm link (Recommended for development)
 
-1. In the `mailgun-inbound-email` directory:
+1. In the `node-inbound-email` directory:
 ```bash
-cd /home/ritik-ls/Desktop/mailgun-inbound-email
+cd /home/ritik-ls/Desktop/node-inbound-email
 npm link
 ```
 
 2. In your project directory:
 ```bash
 cd /home/ritik-ls/Desktop/node_skeleton
-npm link mailgun-inbound-email
+npm link node-inbound-email
 ```
 
 ### Option 2: Install from local path
@@ -24,7 +24,7 @@ In your project's `package.json`, add:
 ```json
 {
   "dependencies": {
-    "mailgun-inbound-email": "file:../mailgun-inbound-email"
+    "node-inbound-email": "file:../node-inbound-email"
   }
 }
 ```
@@ -49,14 +49,14 @@ npm publish
 
 4. Then install in your project:
 ```bash
-npm install mailgun-inbound-email
+npm install node-inbound-email
 ```
 
 ## After Setup
 
 Make sure to install dependencies in the package directory:
 ```bash
-cd /home/ritik-ls/Desktop/mailgun-inbound-email
+cd /home/ritik-ls/Desktop/node-inbound-email
 npm install
 ```
 

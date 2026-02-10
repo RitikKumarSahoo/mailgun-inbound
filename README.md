@@ -1,11 +1,11 @@
-# mailgun-inbound-email
+# node-inbound-email
 
 A **production-ready** utility package for manual processing of Mailgun webhooks and sending emails. Supports both **inbound email webhooks** and **event webhooks** (delivered, opened, clicked, bounced, etc.), plus **email sending** via AWS SES or Mailgun using SMTP. Full manual control - you handle everything from webhook setup to data processing.
 
 ## 🚀 Quick Start
 
 ```bash
-npm install mailgun-inbound-email
+npm install node-inbound-email
 ```
 
 > ⚠️ **REQUIRED**: Set `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable. See [Security](#-security) section for details.
@@ -13,7 +13,7 @@ npm install mailgun-inbound-email
 ```javascript
 const express = require('express');
 const multer = require('multer');
-const { processEmailData, verifyRequestSignature } = require('mailgun-inbound-email');
+const { processEmailData, verifyRequestSignature } = require('node-inbound-email');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -62,7 +62,7 @@ For handling Mailgun event webhooks (delivered, opened, clicked, bounced, etc.):
 
 ```javascript
 const express = require('express');
-const { mailgunWebhook } = require('mailgun-inbound-email');
+const { mailgunWebhook } = require('node-inbound-email');
 
 const app = express();
 
@@ -100,7 +100,7 @@ app.listen(3000);
 ## 📦 Installation
 
 ```bash
-npm install mailgun-inbound-email
+npm install node-inbound-email
 ```
 
 > ⚠️ **REQUIRED**: Set `MAILGUN_WEBHOOK_SIGNING_KEY` environment variable. See [Security](#-security) section for instructions.
@@ -116,7 +116,7 @@ For receiving and processing inbound emails sent to your domain.
 ```javascript
 const express = require('express');
 const multer = require('multer');
-const { processEmailData, verifyRequestSignature } = require('mailgun-inbound-email');
+const { processEmailData, verifyRequestSignature } = require('node-inbound-email');
 
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -181,7 +181,7 @@ app.listen(3000);
 ### Processing Attachments
 
 ```javascript
-const { processEmailData } = require('mailgun-inbound-email');
+const { processEmailData } = require('node-inbound-email');
 const fs = require('fs');
 
 app.post('/webhook/inbound', express.urlencoded({ extended: true }), upload.any(), (req, res) => {
@@ -234,7 +234,7 @@ For handling Mailgun event webhooks that track email delivery, opens, clicks, an
 
 ```javascript
 const express = require('express');
-const { mailgunWebhook } = require('mailgun-inbound-email');
+const { mailgunWebhook } = require('node-inbound-email');
 
 const app = express();
 
@@ -270,7 +270,7 @@ app.listen(3000);
 
 ```javascript
 const express = require('express');
-const { mailgunWebhook } = require('mailgun-inbound-email');
+const { mailgunWebhook } = require('node-inbound-email');
 
 const app = express();
 
@@ -318,7 +318,7 @@ This package includes a flexible email sending function that supports both **AWS
 ### Quick Start
 
 ```javascript
-const { createEmailSender } = require('mailgun-inbound-email');
+const { createEmailSender } = require('node-inbound-email');
 
 // Create email sender (supports 'aws-ses' or 'mailgun')
 const sendEmail = createEmailSender('mailgun');
@@ -408,7 +408,7 @@ SMTP_AUTH_PASSWORD=your-mailgun-smtp-password  # Your Mailgun SMTP password
 #### Basic Email
 
 ```javascript
-const { createEmailSender } = require('mailgun-inbound-email');
+const { createEmailSender } = require('node-inbound-email');
 const sendEmail = createEmailSender('mailgun');
 
 await sendEmail('welcome', {
@@ -534,7 +534,7 @@ A function `sendEmail(template, options)` that sends emails using the configured
 
 **Example:**
 ```javascript
-const { createEmailSender } = require('mailgun-inbound-email');
+const { createEmailSender } = require('node-inbound-email');
 const sendEmail = createEmailSender('aws-ses');
 // or
 const sendEmail = createEmailSender('mailgun');
@@ -650,7 +650,7 @@ Verify Mailgun webhook signature automatically from request. This is the **recom
 
 **Example:**
 ```javascript
-const { verifyRequestSignature } = require('mailgun-inbound-email');
+const { verifyRequestSignature } = require('node-inbound-email');
 
 // Simple usage - automatically extracts token, timestamp, signature from req.body
 // Uses MAILGUN_WEBHOOK_SIGNING_KEY from environment automatically
@@ -701,7 +701,7 @@ Production-ready handler for Mailgun event webhooks (delivered, opened, clicked,
 
 **Example:**
 ```javascript
-const { mailgunWebhook } = require('mailgun-inbound-email');
+const { mailgunWebhook } = require('node-inbound-email');
 
 app.post('/webhook/mailgun-events', express.json(), async (req, res) => {
   const eventData = await mailgunWebhook(req, res);
@@ -775,7 +775,7 @@ Create an email sender function with configurable provider (AWS SES or Mailgun) 
 
 **Example:**
 ```javascript
-const { createEmailSender } = require('mailgun-inbound-email');
+const { createEmailSender } = require('node-inbound-email');
 
 const sendEmail = createEmailSender('mailgun');
 // or
@@ -829,7 +829,7 @@ See the setup sections below for detailed instructions:
 
 ```bash
 # Install the package
-npm install mailgun-inbound-email
+npm install node-inbound-email
 
 # Install required dependencies
 npm install express multer
@@ -1005,7 +1005,7 @@ Event webhooks track email events like delivered, opened, clicked, bounced, etc.
 
 ```bash
 # Install the package
-npm install mailgun-inbound-email
+npm install node-inbound-email
 
 # Install required dependencies (only express needed for event webhooks)
 npm install express

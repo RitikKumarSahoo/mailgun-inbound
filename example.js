@@ -1,5 +1,5 @@
 /**
- * Example usage of mailgun-inbound-email package
+ * Example usage of node-inbound-email package
  * 
  * This example shows full manual control - you handle everything
  * from webhook setup to email processing.
@@ -132,7 +132,7 @@ app.post('/webhook/inbound',
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    service: 'mailgun-inbound-email',
+    service: 'node-inbound-email',
     timestamp: new Date().toISOString()
   });
 });

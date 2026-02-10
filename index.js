@@ -115,7 +115,7 @@ function cleanMessageId(value) {
  * @returns {boolean} True if signature is valid
  * 
  * @example
- * const { verifyRequestSignature } = require('mailgun-inbound-email');
+ * const { verifyRequestSignature } = require('node-inbound-email');
  * const signingKey = process.env.MAILGUN_WEBHOOK_SIGNING_KEY;
  * if (!verifyRequestSignature(req, signingKey)) {
  *   return res.status(401).json({ error: 'Invalid signature' });
@@ -153,7 +153,7 @@ function verifyRequestSignature(req, signingKey = process.env.MAILGUN_WEBHOOK_SI
  * @throws {Error} If request body is invalid
  * 
  * @example
- * const { processEmailData } = require('mailgun-inbound-email');
+ * const { processEmailData } = require('node-inbound-email');
  * const { emailData } = processEmailData(req);
  * console.log(emailData.from, emailData.subject);
  */
@@ -246,7 +246,7 @@ function processEmailData(req) {
  * @returns {Promise<Object|null>} Returns event data if successfully processed, null otherwise
  * 
  * @example
- * const { mailgunWebhook } = require('mailgun-inbound-email');
+ * const { mailgunWebhook } = require('node-inbound-email');
  * 
  * app.post('/webhook/mailgun-events', express.json(), async (req, res) => {
  *   const eventData = await mailgunWebhook(req, res);
@@ -486,7 +486,7 @@ async function mailgunWebhook(req, res, signingKey = process.env.MAILGUN_WEBHOOK
  * 
  * @example
  * // Using AWS SES SMTP
- * const { createEmailSender } = require('mailgun-inbound-email');
+ * const { createEmailSender } = require('node-inbound-email');
  * const sendEmail = createEmailSender('aws-ses');
  * await sendEmail('welcome', {
  *   to: 'user@example.com',
@@ -496,7 +496,7 @@ async function mailgunWebhook(req, res, signingKey = process.env.MAILGUN_WEBHOOK
  * 
  * @example
  * // Using Mailgun SMTP
- * const { createEmailSender } = require('mailgun-inbound-email');
+ * const { createEmailSender } = require('node-inbound-email');
  * const sendEmail = createEmailSender('mailgun');
  * await sendEmail('welcome', {
  *   to: 'user@example.com',
