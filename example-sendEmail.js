@@ -6,7 +6,7 @@
  * for the provider you're using.
  */
 
-const createEmailSender = require('./sendEmail');
+const { createEmailSender } = require('./index');
 
 // Example 1: Using AWS SES SMTP
 // Set these environment variables for AWS SES:
