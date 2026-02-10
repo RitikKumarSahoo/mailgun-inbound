@@ -1,6 +1,6 @@
 {
   "name": "mailgun-inbound-email",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "description": "Production-ready utility functions for manual processing of Mailgun inbound email webhooks and sending emails via AWS SES or Mailgun. Full manual control - you handle everything.",
   "main": "index.js",
   "scripts": {
